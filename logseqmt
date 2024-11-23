@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+if ! perl -e 'exit ($] >= 5.038 ? 0 : 1)'; then
+    echo "Perl 5.38 or higher is required."
+    exit 1
+fi
+if ! command -v cpanm &> /dev/null
+then
+    echo "cpanm could not be found. Please install package cpan-minus to proceed."
+    exit 1
+fi
+if ! perl -MCarton -e 1 &> /dev/null
+then
+    cpanm Carton
+fi
+if ! carton check &> /dev/null
+then
+    carton install
+fi
+carton exec perl maintainance.pl
