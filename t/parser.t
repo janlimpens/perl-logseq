@@ -31,7 +31,10 @@ subtest 'parse_line' => sub {
 
 subtest 'parse' => sub {
     my $document = do { local $/; <DATA> };
-    my $tokens = $parser->parse($document);
+    ok $document =~ /^- some content/;
+    my $parsed = $parser->parse($document);
+    my $stringified = $parsed->stringify();
+    is $stringified, $document;
     ok 1;
 };
 
@@ -48,9 +51,8 @@ subtest 'number weirdness' => sub {
 done_testing();
 
 __DATA__
-
 - some content typical to documents
 - [[link ahoy]] is elsewhere and #aaa is a nice tag
     - *text* is also a thing
     - {{weird stuff}} happens all along
-- 210 is a lot of müney
+- 210 is a lot of müney 🍗

@@ -69,7 +69,6 @@ class Logseq::Parser::Document
 
 class Logseq::Parser
 {
-    use Encode qw(decode);
     use Log::Any;
 
     field $log :param = Log::Any->get_logger();
@@ -78,9 +77,9 @@ class Logseq::Parser
         '{' => '}',
         '(' => ')',
         '<' => '>' );
+    field $line_break :param = "\n";
 
     method parse_line($string) {
-        # $string = decode('UTF-8', $string);
         my @chars = split(//, $string);
         # p @chars;
         my $line = Logseq::Parser::Line->new();
@@ -151,9 +150,9 @@ class Logseq::Parser
     }
 
     method parse($md) {
-        my @lines = split(/\n/, $md);
-        my $title = shift(@lines);
-        @lines = map { $self->parse_line($_) } @lines;
+        my @lines =
+            map { $self->parse_line($_) }
+            split($line_break, $md);
         return Logseq::Parser::Document->new(lines => \@lines)
     }
 }
