@@ -2,14 +2,14 @@ use strict;
 use warnings;
 use Test2::V0;
 use lib 'lib';
-use Logseq::Parser;
+use Logseq::Tokenizer;
 use DDP;
 
-# Create a new parser object
-my $parser = Logseq::Parser->new();
+# Create a new Tokenizer object
+my $Tokenizer = Logseq::Tokenizer->new();
 
-# Test parse_line method
-subtest 'parse_line' => sub {
+# Test tokenize_line method
+subtest 'tokenize_line' => sub {
     my %test = (
         '-' => 'word',
         'so' => 'word',
@@ -22,30 +22,36 @@ subtest 'parse_line' => sub {
         '(https://duckduckgo.com)' => 'bracket',
     );
     my $line = join ' ', keys %test;
-    my $parsed = $parser->parse_line($line);
-    my %tokens = map { $_->value() => $_->type() } $parsed->tokens()->@*;
+    my $tokenized = $Tokenizer->tokenize_line($line);
+    my %tokens = map { $_->value() => $_->type() } $tokenized->tokens()->@*;
     for my $value (keys %test) {
         is $tokens{$value}, $test{$value}, "Token type for $value";
     }
 };
 
-subtest 'parse' => sub {
+subtest 'tokenize' => sub {
     my $document = do { local $/; <DATA> };
     ok $document =~ /^- some content/;
-    my $parsed = $parser->parse($document);
-    my $stringified = $parsed->stringify();
+    my $tokenized = $Tokenizer->tokenize($document);
+    my $stringified = $tokenized->stringify();
     is $stringified, $document;
     ok 1;
 };
 
 subtest 'number weirdness' => sub {
     my $text = '210 ü';
-    my $parsed = $parser->parse_line($text);
-    is $parsed->stringify(), $text;
-    my @tokens = $parsed->tokens()->@*;
+    my $tokenized = $Tokenizer->tokenize_line($text);
+    is $tokenized->stringify(), $text;
+    my @tokens = $tokenized->tokens()->@*;
     is $tokens[0]->value(), '210';
     is $tokens[1]->value(), ' ';
     is $tokens[2]->value(), 'ü';
+};
+
+subtest 'final line break' => sub {
+    my $text = "\nFlight\n\n(GRU)\n";
+    my $tokenized = $Tokenizer->tokenize($text);
+    is $tokenized->stringify(), $text;
 };
 
 done_testing();

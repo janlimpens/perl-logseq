@@ -3,7 +3,7 @@ use feature qw(class);
 no warnings 'experimental::class';
 use lib 'lib';
 use Log::Any;
-use Logseq::Parser;
+use Logseq::Tokenizer;
 
 class Logseq::AutoTagger {
     use Path::Tiny;
@@ -32,18 +32,18 @@ class Logseq::AutoTagger {
         my %files =
             map { $_->absolute() => { file => $_ } }
             $self->get_all_files(path($dir));
-        my $parser = Logseq::Parser->new(log => $log);
+        my $Tokenizer = Logseq::Tokenizer->new(log => $log);
         for my $path (keys %files) {
             my $file = $files{$path}->{file};
             my $content = path($file)->slurp();
-            $files{$path}{parsed} = $parser->parse($content);
+            $files{$path}{tokenized} = $Tokenizer->tokenize($content);
         }
         my %tags =
             map { $_ => 1 }
             map { lc $_->value() =~ s/^#//r }
             grep { $_->type() eq 'tag' }
             map { $_->tokens()->@* }
-            map { $_->{parsed}->lines()->@* }
+            map { $_->{tokenized}->lines()->@* }
             values %files;
         for my $path (keys %files) {
             my $file = $files{$path}->{file};
@@ -51,7 +51,7 @@ class Logseq::AutoTagger {
                 grep { $tags{lc $_->value()} }
                 grep { $_->type() eq 'word' }
                 map { $_->tokens()->@* }
-                $files{$path}{parsed}->lines()->@*;
+                $files{$path}{tokenized}->lines()->@*;
             for my $word (@words) {
                 my $value = $word->value();
                 $word->set_value("#$value");
@@ -59,9 +59,9 @@ class Logseq::AutoTagger {
             }
         }
         for my $file (sort values %files) {
-            my $parsed = $file->{parsed};
-            next unless $parsed->is_dirty();
-            my $content = $parsed->stringify();
+            my $tokenized = $file->{tokenized};
+            next unless $tokenized->is_dirty();
+            my $content = $tokenized->stringify();
             if ($dry_run) {
                 $log->info("Would write to $file->{file}");
                 $log->info($content);

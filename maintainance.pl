@@ -13,15 +13,28 @@ GetOptions(
     'dry-run' => \my $dry_run,
     'dir=s' => \my $dir,
     'verbose' => \my $verbose,
-) or die "Usage: $0 --tags\n";
+);
+unless ($process_tags) {
+    say do { local $/; <DATA> };
+    exit;
+}
 my %args = (
     defined($dry_run) ? (dry_run => $dry_run) : (),
     defined($dir) ? (dir => $dir) : (),
     defined($verbose) ? (verbose => $verbose) : (),
     log => $log);
 if ($process_tags) {
-    my $tag = Logseq::AutoTagger->new(%args);
-    $tag->process();
+    my $tagger = Logseq::AutoTagger->new(%args);
+    $tagger->process();
 }
 
 1;
+
+__DATA__
+maintainance.pl
+allows you to process logseq files in bulk
+Usage:
+    --tags      process tags
+    --dry-run   dry run
+    --dir=DIR   directory, default is current directory
+    --verbose   verbose output

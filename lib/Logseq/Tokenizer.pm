@@ -1,10 +1,10 @@
-package Logseq::Parser;
+package Logseq::Tokenizer;
 use v5.40;
 use feature qw(class);
 no warnings 'experimental::class';
 use DDP;
 
-class Logseq::Parser::Token
+class Logseq::Tokenizer::Token
 {
     field $type :param :reader;
     field $value :param :reader //= '';
@@ -30,7 +30,7 @@ class Logseq::Parser::Token
     }
 }
 
-class Logseq::Parser::Line
+class Logseq::Tokenizer::Line
 {
     field $tokens :param :reader = [];
 
@@ -48,7 +48,7 @@ class Logseq::Parser::Line
     }
 }
 
-class Logseq::Parser::Document
+class Logseq::Tokenizer::Document
 {
     field $lines :param :reader = [];
     field $line_break :param = "\n";
@@ -67,7 +67,7 @@ class Logseq::Parser::Document
     }
 }
 
-class Logseq::Parser
+class Logseq::Tokenizer
 {
     use Log::Any;
 
@@ -79,10 +79,10 @@ class Logseq::Parser
         '<' => '>' );
     field $line_break :param = "\n";
 
-    method parse_line($string) {
+    method tokenize_line($string) {
         my @chars = split(//, $string);
         # p @chars;
-        my $line = Logseq::Parser::Line->new();
+        my $line = Logseq::Tokenizer::Line->new();
         my $token;
         my $in_bracket = undef;
         my $bracket_count = 0;
@@ -92,7 +92,7 @@ class Logseq::Parser
             if ($brackets{$char} && !$in_bracket) {
                 $line->push($token)
                     if $token;
-                $token = Logseq::Parser::Token->new(
+                $token = Logseq::Tokenizer::Token->new(
                     type => 'bracket', value => $char, start => $i);
                 $in_bracket = $char;
                 $log->trace("Bracket in $char at $i");
@@ -105,18 +105,19 @@ class Logseq::Parser
             } elsif ($char eq '#' && $next_char =~ /\w/) {
                 $line->push($token)
                     if $token;
-                $token = Logseq::Parser::Token->new(
+                $token = Logseq::Tokenizer::Token->new(
                     type => 'tag', value => $char, start => $i);
                 $log->trace("Tag in $char at $i");
-            } elsif ($char =~ /\s/) {
+            } elsif ($char =~ /\s|[\p{P}]/) {
                 if ($token && $token->type() eq 'bracket') {
                     $token->add_char($char);
                     $log->trace("Bracket whitespace space $char at $i");
                 } else {
                     $line->push($token)
                         if $token;
-                    $token = Logseq::Parser::Token->new(
-                        type => 'whitespace', value => $char, start => $i);
+                    my $type = $char =~ /\s/ ? 'whitespace' : 'punctuation';
+                    $token = Logseq::Tokenizer::Token->new(
+                        type => $type, value => $char, start => $i);
                     $log->trace("Whitespace in $char at $i");
                 }
             } else { # some character, not whitespace
@@ -136,7 +137,7 @@ class Logseq::Parser
                     if $in_bracket && $char eq $in_bracket;
                 $bracket_count--
                     if $in_bracket && $char eq $brackets{$in_bracket};
-                $token //= Logseq::Parser::Token->new(
+                $token //= Logseq::Tokenizer::Token->new(
                     type => 'word', start => $i);
                 $token->add_char($char);
                 $log->trace("'$char' in word at $i");
@@ -149,10 +150,10 @@ class Logseq::Parser
         return $line
     }
 
-    method parse($md) {
+    method tokenize($md) {
         my @lines =
-            map { $self->parse_line($_) }
+            map { $self->tokenize_line($_) }
             split($line_break, $md);
-        return Logseq::Parser::Document->new(lines => \@lines)
+        return Logseq::Tokenizer::Document->new(lines => \@lines)
     }
 }
