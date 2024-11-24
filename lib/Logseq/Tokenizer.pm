@@ -12,7 +12,8 @@ class Logseq::Tokenizer::Token
     field $is_dirty :reader = 0;
 
     method add_char($char) {
-        $value .= $char
+        $value .= $char;
+        return
     }
 
     method stringify() {
@@ -34,7 +35,7 @@ class Logseq::Tokenizer::Line
 {
     field $tokens :param :reader = [];
 
-    method push($token) {
+    method add_token($token) {
         push $tokens->@*, $token;
         return
     }
@@ -53,7 +54,7 @@ class Logseq::Tokenizer::Document
     field $lines :param :reader = [];
     field $line_break :param = "\n";
 
-    method push($line) {
+    method add_line($line) {
         push $lines->@*, $line;
         return
     }
@@ -70,66 +71,72 @@ class Logseq::Tokenizer::Document
 class Logseq::Tokenizer
 {
     use Log::Any;
-
+    use constant {
+        WHITESPACE => 'whitespace',
+        PUNCTUATION => 'punctuation',
+        TAG => 'tag',
+        BRACKET => 'bracket',
+        WORD => 'word'
+    };
     field $log :param = Log::Any->get_logger();
     field %brackets = (
         '[' => ']',
         '{' => '}',
         '(' => ')',
         '<' => '>' );
+    field $bracket_regexp = join '|', map { quotemeta($_) } (keys %brackets, values %brackets);
+    field $punctuation_regexp = qr/[\.,:;?¿!…]/;
     field $line_break :param = "\n";
 
     method tokenize_line($string) {
         my @chars = split(//, $string);
-        # p @chars;
         my $line = Logseq::Tokenizer::Line->new();
         my $token;
         my $in_bracket = undef;
         my $bracket_count = 0;
+        my $add_token = sub {
+            $line->add_token($token)
+                if $token;
+            $token = undef;
+        };
         for (my $i = 0; $i < @chars; $i++) {
             my $char = $chars[$i];
             my $next_char = ($i + 1) < @chars ? $chars[$i + 1] : '';
             if ($brackets{$char} && !$in_bracket) {
-                $line->push($token)
-                    if $token;
+                $add_token->();
                 $token = Logseq::Tokenizer::Token->new(
-                    type => 'bracket', value => $char, start => $i);
+                    type => BRACKET, value => $char, start => $i);
                 $in_bracket = $char;
                 $log->trace("Bracket in $char at $i");
             } elsif ($in_bracket && $brackets{$in_bracket} eq $char && !$bracket_count) {
                 $token->add_char($char);
-                $line->push($token);
-                $token = undef;
+                $add_token->();
                 $in_bracket = undef;
                 $log->trace("Bracket out $char at $i");
             } elsif ($char eq '#' && $next_char =~ /\w/) {
-                $line->push($token)
-                    if $token;
+                $add_token->();
                 $token = Logseq::Tokenizer::Token->new(
                     type => 'tag', value => $char, start => $i);
                 $log->trace("Tag in $char at $i");
-            } elsif ($char =~ /\s|[\p{P}]/) {
-                if ($token && $token->type() eq 'bracket') {
+            } elsif ($char =~ /\s|$punctuation_regexp/) { # whitespace or punctuation
+                my $type = $char =~ /\s/ ? WHITESPACE : PUNCTUATION;
+                if ($token && $token->type() eq BRACKET) {
                     $token->add_char($char);
-                    $log->trace("Bracket whitespace space $char at $i");
+                    $log->trace("Bracket $type $char at $i");
                 } else {
-                    $line->push($token)
-                        if $token;
-                    my $type = $char =~ /\s/ ? 'whitespace' : 'punctuation';
+                    $add_token->();
                     $token = Logseq::Tokenizer::Token->new(
                         type => $type, value => $char, start => $i);
-                    $log->trace("Whitespace in $char at $i");
+                    $log->trace("$type char at $i");
                 }
-            } else { # some character, not whitespace
-                if ($token && $token->type() eq 'whitespace') {
-                    $line->push($token);
-                    $token = undef;
+            } else { # some character, not whitespace or punctuation
+                if ($token && $token->type() eq WHITESPACE) {
+                    $add_token->();
                     $log->trace("Whitespace ends at $i");
                 }
-                if ($token && $token->type() eq 'tag') {
+                if ($token && $token->type() eq TAG) {
                     if ($char !~ /\w|_|-/) {
-                        $line->push($token);
-                        $token = undef;
+                        $add_token->();
                     }
                     $log->trace("Tag ends at $i");
                 }
@@ -138,12 +145,12 @@ class Logseq::Tokenizer
                 $bracket_count--
                     if $in_bracket && $char eq $brackets{$in_bracket};
                 $token //= Logseq::Tokenizer::Token->new(
-                    type => 'word', start => $i);
+                    type => WORD, start => $i);
                 $token->add_char($char);
                 $log->trace("'$char' in word at $i");
             }
             if ($token && $next_char eq '') {
-                $line->push($token);
+                $add_token->();
                 $log->trace("End of line at $i");
             }
         }
